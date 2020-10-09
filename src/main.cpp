@@ -35,7 +35,11 @@
 // your Bot Token (Get from Botfather Telegram)
 #define botToken "1045368619:AAGtCFl__nxhqg7W3JQXbSHDb5gNR3pBC7E"
 String TelegramChatId = "1086363450"; // This can be got by using a bot called "myIdBot"
+String CHAT_ID = "1086363450";
 const int capacity = JSON_OBJECT_SIZE(350);
+//Checks for new messages every 1 second.
+int botRequestDelay = 1000;
+unsigned long lastTimeBotRan;
 
 Ticker flipper;
 
@@ -207,11 +211,45 @@ void callback(char *topic, byte *payload, int length)
   }
 }
 
-/* ***************************************************************************
- */
+/*****************************************************************************/
+// Telegram stuff
+/*****************************************************************************/
+void handleNewMessages(int numNewMessages) {
+  Serial.print("Handle New Messages: ");
+  Serial.println(numNewMessages);
+
+  for (int i = 0; i < numNewMessages; i++) {
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+    
+    String from_name = bot.messages[i].from_name;
+    if (text == "/start") {
+      String welcome = "Welcome , " + from_name + "\n";
+      welcome += "Use the following commands to interact with the intercom \n";
+      welcome += "/gallarydoor : opens the gallary door\n";
+      welcome += "/frontdoor : opens the front door \n";
+      bot.sendMessage(CHAT_ID, welcome, "");
+    }
+    if (text == "/gallarydoor") {
+      sys_status = sys_open_start;
+      Serial.println("Open gallary door now");
+    }
+    if (text == "/frontdoor") {
+      Serial.println("Open front door now");
+    }
+  }
+}
+
+/*****************************************************************************/
 // Blue led blink cycle
-/* ***************************************************************************
- */
+/*****************************************************************************/
 void Blink()
 {
   if (TckCnt == 1)
@@ -234,12 +272,12 @@ void Blink()
 void OpenDoor(void)
 {
   digitalWrite(Video, 0);
+  delay(250);
+  digitalWrite(Key, 0);
   bot.sendMessage(TelegramChatId, "Galley door openend\n", "Markdown");
   TelnetStream.println("Galley door openend\n");
   delay(1500);
   digitalWrite(Video, 1);
-  delay(1000);
-  digitalWrite(Key, 0);
   delay(1000);
   digitalWrite(Key, 1);
 }
@@ -260,6 +298,18 @@ void RingDetect(void)
   sprintf(msg, "Deurbel");
   root["svalue"] = msg;
   root.printTo(msg);
+  client.publish("domoticz/in", msg);
+}
+
+void SendDisplayOn(void)
+{
+  Serial.println("Dispay on notification to MQTT");
+  TelnetStream.println("Dispay on notification to MQTT");
+  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
+  JsonObject &root_vid = jsonBuffer.createObject();
+  root_vid["idx"] = idx_display;
+  root_vid["nvalue"] = 1;
+  root_vid.printTo(msg);
   client.publish("domoticz/in", msg);
 }
 
@@ -424,6 +474,8 @@ void loop()
       belstamp = millis();
       digitalWrite(displayOn, true);
       displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
+      SendDisplayOn();
+
     }
     else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4)
     {
@@ -431,6 +483,7 @@ void loop()
       TelnetStream.println("Deurbel!!!");
       digitalWrite(displayOn, true);
       displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+      SendDisplayOn();
     }
   }
   //reset buffer after timeout
@@ -445,4 +498,14 @@ void loop()
     SendDisplayOff();
     digitalWrite(displayOn, false);
   }
+  if (millis() > lastTimeBotRan + botRequestDelay)  {
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    while (numNewMessages) {
+      Serial.println("got response");
+      handleNewMessages(numNewMessages);
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    }
+    lastTimeBotRan = millis();
+  }
+
 }
