@@ -31,6 +31,7 @@
 #define BlueLedOn LOW
 #define sys_idle 0
 #define sys_open_start 1
+#define sys_send_ipadress 2
 
 // your Bot Token (Get from Botfather Telegram)
 #define botToken "1045368619:AAGtCFl__nxhqg7W3JQXbSHDb5gNR3pBC7E"
@@ -235,6 +236,7 @@ void handleNewMessages(int numNewMessages) {
       welcome += "Use the following commands to interact with the intercom \n";
       welcome += "/gallarydoor : opens the gallary door\n";
       welcome += "/frontdoor : opens the front door \n";
+      welcome += "/ipadress : returns the local Ipaddress \n";
       bot.sendMessage(CHAT_ID, welcome, "");
     }
     if (text == "/gallarydoor") {
@@ -244,6 +246,12 @@ void handleNewMessages(int numNewMessages) {
     if (text == "/frontdoor") {
       Serial.println("Open front door now");
     }
+    if (text == "/ipadress") {
+      Serial.println("IP address: ");
+      Serial.println(WiFi.localIP()); // You can get IP address assigned to ESP
+      sys_status = sys_send_ipadress;
+    }
+
   }
 }
 
@@ -407,7 +415,12 @@ void setup()
 void loop()
 {
   ArduinoOTA.handle();
-
+  if(sys_status == sys_send_ipadress){
+    sys_status = 0;
+    String ms = WiFi.localIP().toString();
+    bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
+    TelnetStream.println("Ipaddress: " + ms);
+  }
   if (sys_status == sys_open_start)
   {
     flipper.detach(); // stop blink
@@ -415,11 +428,13 @@ void loop()
     if (millis() < belstamp + 100000)
     { // onley open door if the doorbel downstairs is pushed.
       OpenDoor();
+      displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
     }
     else
     {
       bot.sendMessage(TelegramChatId, "Galley door prefend for opening!...\n", "Markdown");
       TelnetStream.println("Galley door prefend for opening!...");
+      displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
     }
     sys_status = sys_idle;
     digitalWrite(BlueLed, BlueLedOff);
