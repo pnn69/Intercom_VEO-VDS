@@ -1,14 +1,22 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
-#include <ArduinoOTA.h>
+#include <ArduinoJson.h>    //use ver > 6.0
+#include <ArduinoOTA.h>     //use ver 1.0.0
 #include <ESP8266WiFi.h>
 #include <NTPClient.h>
-#include <PubSubClient.h>
 #include <SoftwareSerial.h>
 #include <Ticker.h>
 #include <UniversalTelegramBot.h>
 #include <WiFiClientSecure.h>
 #include <TelnetStream.h>
+/*
+ change this in PubSubClient.h
+ #define MQTT_MAX_PACKET_SIZE 128
+ Put this line infront of the lib include.
+ Otherwise it has no effect.
+ Needed for the long pacages generatied by domotiz
+*/
+#define MQTT_MAX_PACKET_SIZE 400
+#include <PubSubClient.h>
 
 
 #if defined(ESP8266) && !defined(D5)
@@ -31,13 +39,16 @@
 #define BlueLedOn LOW
 #define sys_idle 0
 #define sys_open_start 1
+#define sys_open_front_door 3
 #define sys_send_ipadress 2
 
 // your Bot Token (Get from Botfather Telegram)
 #define botToken "1045368619:AAGtCFl__nxhqg7W3JQXbSHDb5gNR3pBC7E"
 String TelegramChatId = "1086363450"; // This can be got by using a bot called "myIdBot"
 String CHAT_ID = "1086363450";
-const int capacity = JSON_OBJECT_SIZE(350);
+//Alocate the JSON document
+StaticJsonDocument<500> doc;
+
 //Checks for new messages every 1 second.
 int botRequestDelay = 1000;
 unsigned long lastTimeBotRan;
@@ -127,39 +138,30 @@ void setup_OTA()
 /* MQTT setup */
 /* ***************************************************************************
  */
-void reconnect()
-{
-  // Loop until we're reconnected
-  char b[10];
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  sprintf(b, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4],
-          mac[5]);
-  while (!client.connected())
-  {
-    Serial.println("Attempting MQTT connection...");
-    // Attempt to connect
-    JsonObject &root = jsonBuffer.createObject();
-    root["idx_bel"] = idx_bel;
-    root["nvalue"] = 4;
-    root["svalue"] = "Offline";
-    root.printTo(msg);
-    if (client.connect(b, mqtt_user, mqtt_password, "domoticz/in", 1, 1,
-                       msg)) // login and send last will
-    {
-      // ... and resubscribe
-      client.subscribe("domoticz/out");
-      Serial.println("Lucky loggin in");
-      TckAck = 10;
+void reconnect(){
+    // Loop until we're reconnected
+    char b[10];
+    sprintf(b, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    while (!client.connected()){
+        Serial.println("Attempting MQTT connection...");
+        // Attempt to connect
+        doc["idx_bel"] = idx_bel;
+        doc["nvalue"] = 4;
+        doc["svalue"] = "Offline";
+        serializeJson(doc, msg);
+        if (client.connect(b, mqtt_user, mqtt_password, "domoticz/in", 1, 1, msg)){ // login and send last will
+            // ... and resubscribe
+            client.subscribe("domoticz/out");
+            Serial.println("Lucky loggin in");
+            TckAck = 10;
+        }else{
+            Serial.print("failed, rc=");
+            Serial.print(client.state());
+            Serial.println(" try again in 5 seconds");
+            // Wait 5 seconds before retrying
+        delay(5000);
+        }
     }
-    else
-    {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
 }
 
 /* ***************************************************************************
@@ -167,92 +169,80 @@ void reconnect()
 /* MQTT stuff comming in */
 /* ***************************************************************************
  */
-void callback(char *topic, byte *payload, int length)
-{
-  char in[MQTT_MAX_PACKET_SIZE + 1];
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  for (int i = 0; i < length; i++)
-  {
-    in[i] = (char)payload[i];
-  }
-  in[length] = 0; // add terminater
-  JsonObject &root = jsonBuffer.parseObject(in);
-  int r_idx = root["idx"];
-  char r_nvalue = root["nvalue"];
-  if (strstr(topic, "domoticz/out") && r_idx == idx_sesam && r_nvalue == 1) // command from domoticz open door downstairs
-  {
-    sys_status = sys_open_start;
-    Serial.println("Open door downstairs command detected");
-    TelnetStream.println("Open door downstairs command detected");
-  }
-  if (strstr(topic, "domoticz/out") && r_idx == idx_display) // command from domoticz open door downstairs
-  {
-    if (r_nvalue == 1)
-    {
-      Serial.println("Display on command detected");
-      TelnetStream.println("Display on command detected");
-      displayoff = 1000 * 60 * 60 * 4 + millis();  //turn dispay on for 4 hours
-      bot.sendMessage(TelegramChatId, "Display on\n", "Markdown");
-      digitalWrite(displayOn, true);
+void callback(char *topic, byte *payload, int length){
+    DeserializationError error = deserializeJson(doc, (char*)payload);
+    if(error){
+        TelnetStream.println("Error decoding JSON sting");
+        Serial.println("Error decoding JSON sting");
+        return;
     }
-    else
-    {
-      Serial.println("Display off command detected");
-      TelnetStream.println("Display off command detected");
-      displayoff = millis();
+    int r_idx = doc["idx"];
+    int r_nvalue = doc["nvalue"];
+    if (strstr(topic, "domoticz/out") && r_idx == idx_sesam && r_nvalue ==1 ){ // command from domoticz open door downstairs
+        sys_status = sys_open_start;
+        Serial.println("Open door downstairs command detected");
+        TelnetStream.println("Open door downstairs command detected");
     }
-  }
-  if (r_idx == 999)
-  {
-    const char *nvalue = root["nvalue"];
-    bot.sendMessage(TelegramChatId, nvalue, "Markdown");
-    Serial.print("Message forwarded to telgram:");
-    Serial.println(nvalue);
-    TelnetStream.print("Message forwarded to telgram!");
-  }
+    if (strstr(topic, "domoticz/out") && r_idx == idx_display){ // command from domoticz open door downstairs
+        if (r_nvalue ==1){
+            Serial.println("Display on command detected");
+            TelnetStream.println("Display on command detected");
+            displayoff = 1000 * 60 * 60 * 4 + millis();  //turn dispay on for 4 hours
+            bot.sendMessage(TelegramChatId, "Display on\n", "Markdown");
+            digitalWrite(displayOn, true);
+        }else{
+            Serial.println("Display off command detected");
+            TelnetStream.println("Display off command detected");
+            displayoff = millis();
+        }
+    }
+    if (r_idx == 999){
+        const char *nvalue = doc["nvalue"];
+        bot.sendMessage(TelegramChatId, nvalue, "Markdown");
+        Serial.print("Message forwarded to telgram:");
+        Serial.println(nvalue);
+        TelnetStream.print("Message forwarded to telgram!");
+    }
 }
 
 /*****************************************************************************/
 // Telegram stuff
 /*****************************************************************************/
 void handleNewMessages(int numNewMessages) {
-  Serial.print("Handle New Messages: ");
-  Serial.println(numNewMessages);
-
-  for (int i = 0; i < numNewMessages; i++) {
-    String chat_id = String(bot.messages[i].chat_id);
-    if (chat_id != CHAT_ID){
-      bot.sendMessage(chat_id, "Unauthorized user", "");
-      continue;
+    Serial.print("Handle New Messages: ");
+    Serial.println(numNewMessages);
+    for (int i = 0; i < numNewMessages; i++) {
+        String chat_id = String(bot.messages[i].chat_id);
+        if (chat_id != CHAT_ID){
+            bot.sendMessage(chat_id, "Unauthorized user", "");
+            continue;
+        }
+        // Print the received message
+        String text = bot.messages[i].text;
+        Serial.println(text);
+        String from_name = bot.messages[i].from_name;
+        if (text == "/start") {
+            String welcome = "Welcome , " + from_name + "\n";
+            welcome += "Use the following commands to interact with the intercom \n";
+            welcome += "/gallarydoor : opens the gallary door\n";
+            welcome += "/frontdoor : opens the front door \n";
+            welcome += "/ipadress : returns the local Ipaddress \n";
+            bot.sendMessage(CHAT_ID, welcome, "");
+        }
+        if (text == "/gallarydoor") {
+            sys_status = sys_open_start;
+            Serial.println("Open gallary door now");
+        }
+        if (text == "/frontdoor") {
+            Serial.println("Open front door now");
+            sys_status = sys_open_front_door;
+        }
+        if (text == "/ipadress") {
+            Serial.println("IP address: ");
+            Serial.println(WiFi.localIP()); // You can get IP address assigned to ESP
+            sys_status = sys_send_ipadress;
+        }
     }
-    
-    // Print the received message
-    String text = bot.messages[i].text;
-    Serial.println(text);
-    
-    String from_name = bot.messages[i].from_name;
-    if (text == "/start") {
-      String welcome = "Welcome , " + from_name + "\n";
-      welcome += "Use the following commands to interact with the intercom \n";
-      welcome += "/gallarydoor : opens the gallary door\n";
-      welcome += "/frontdoor : opens the front door \n";
-      welcome += "/ipadress : returns the local Ipaddress \n";
-      bot.sendMessage(CHAT_ID, welcome, "");
-    }
-    if (text == "/gallarydoor") {
-      sys_status = sys_open_start;
-      Serial.println("Open gallary door now");
-    }
-    if (text == "/frontdoor") {
-      Serial.println("Open front door now");
-    }
-    if (text == "/ipadress") {
-      Serial.println("IP address: ");
-      Serial.println(WiFi.localIP()); // You can get IP address assigned to ESP
-      sys_status = sys_send_ipadress;
-    }
-
-  }
 }
 
 /*****************************************************************************/
@@ -294,18 +284,14 @@ void RingDetect(void)
 {
   Serial.println("Deurbel notification to MQTT");
   TelnetStream.println("Deurbel notification to MQTT");
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  JsonObject &root_bel = jsonBuffer.createObject();
-  root_bel["idx"] = idx_bel;
-  root_bel["nvalue"] = 1;
-  root_bel.printTo(msg);
+  doc["idx"] = idx_bel;
+  doc["nvalue"] = 1;
+  serializeJson(doc, msg);
   client.publish("domoticz/in", msg);
 
-  JsonObject &root = jsonBuffer.createObject();
-  root["idx"] = idx_txt;
-  sprintf(msg, "Deurbel");
-  root["svalue"] = msg;
-  root.printTo(msg);
+  doc["idx"] = idx_txt;
+  doc["svalue"] = "Deurbel";
+  serializeJson(doc, msg);
   client.publish("domoticz/in", msg);
 }
 
@@ -313,11 +299,9 @@ void SendDisplayOn(void)
 {
   Serial.println("Dispay on notification to MQTT");
   TelnetStream.println("Dispay on notification to MQTT");
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  JsonObject &root_vid = jsonBuffer.createObject();
-  root_vid["idx"] = idx_display;
-  root_vid["nvalue"] = 1;
-  root_vid.printTo(msg);
+  doc["idx"] = idx_display;
+  doc["nvalue"] = 1;
+  serializeJson(doc, msg);
   client.publish("domoticz/in", msg);
 }
 
@@ -325,11 +309,9 @@ void SendDisplayOff(void)
 {
   Serial.println("Dispay off notification to MQTT");
   TelnetStream.println("Dispay off notification to MQTT");
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  JsonObject &root_vid = jsonBuffer.createObject();
-  root_vid["idx"] = idx_display;
-  root_vid["nvalue"] = 0;
-  root_vid.printTo(msg);
+  doc["idx"] = idx_display;
+  doc["nvalue"] = 0;
+  serializeJson(doc, msg);
   client.publish("domoticz/in", msg);
 }
 
@@ -347,12 +329,10 @@ void array_to_string(char array[], unsigned int len, char buffer[])
 
 void SendSerialData(char *b, int leng)
 {
-  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE + 1> jsonBuffer;
-  JsonObject &root = jsonBuffer.createObject();
   array_to_string(b, leng, msg);
-  root["idx"] = idx_txt;
-  root["svalue"] = msg;
-  root.printTo(msg);
+  doc["idx"] = idx_txt;
+  doc["svalue"] = msg;
+  serializeJson(doc, msg);
   client.publish("domoticz/in", msg);
 }
 
@@ -412,115 +392,99 @@ void setup()
   
 }
 
-void loop()
-{
-  ArduinoOTA.handle();
-  if(sys_status == sys_send_ipadress){
-    sys_status = 0;
-    String ms = WiFi.localIP().toString();
-    bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
-    TelnetStream.println("Ipaddress: " + ms);
-  }
-  if (sys_status == sys_open_start)
-  {
-    flipper.detach(); // stop blink
-    digitalWrite(BlueLed, BlueLedOn);
-    if (millis() < belstamp + 100000)
-    { // onley open door if the doorbel downstairs is pushed.
-      OpenDoor();
-      displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+void loop(){
+    ArduinoOTA.handle();
+    if (!client.connected()){
+        delay(500);
+        reconnect();
+    }else{
+        client.loop();
     }
-    else
-    {
-      bot.sendMessage(TelegramChatId, "Galley door prefend for opening!...\n", "Markdown");
-      TelnetStream.println("Galley door prefend for opening!...");
-      displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+    if(sys_status == sys_send_ipadress){
+        sys_status = 0;
+        String ms = WiFi.localIP().toString();
+        bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
+        TelnetStream.println("Ipaddress: " + ms);
     }
-    sys_status = sys_idle;
+    if(sys_status == sys_open_start){
+        sys_status = sys_idle;
+        flipper.detach(); // stop blink
+        digitalWrite(BlueLed, BlueLedOn);
+            if (millis() < belstamp + 100000){ // onley open door if the doorbel downstairs is pushed.
+            OpenDoor();
+            displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 2 minuts
+        }else{
+            bot.sendMessage(TelegramChatId, "Galley door prefend for opening!...\n", "Markdown");
+            TelnetStream.println("Galley door prefend for opening!...");
+            displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 2 minuts
+        }
     digitalWrite(BlueLed, BlueLedOff);
     flipper.attach(1, Blink); // call blink eatch 1 sec
-  }
-
-  if (!client.connected())
-  {
-    delay(500);
-    reconnect();
-  }
-  else
-  {
-    client.loop();
-  }
-
-  while (swSer.available() > 0)
-  {
-    timestamp = millis();
-    int tel = 0;
-    while (timestamp + 500 > millis())
-    {
-      while (swSer.available() > 0)
-      {
-        inbuf[tel] = swSer.read();
-        if (logbufcnt == 0)
-        {
-          logstamp = millis();
+    }
+    if(sys_status == sys_open_front_door){
+        sys_status = sys_idle;
+    }
+    //Check for incomming serial data form intercom bus.
+    while (swSer.available() > 0){
+        timestamp = millis();
+        int tel = 0;
+        while (timestamp + 500 > millis()){
+            while (swSer.available() > 0){
+                inbuf[tel] = swSer.read();
+                if (logbufcnt == 0){
+                    logstamp = millis();
+                }
+                if (logbufcnt == buflen - 1){
+                    logbufcnt = 0;
+                }
+                if (tel == buflen - 1){
+                    tel = 0;
+                }
+                logbuf[logbufcnt++] = inbuf[tel];
+                Serial.print(inbuf[tel], HEX);
+                Serial.print(" ");
+                yield();
+                tel++;
+            }
         }
-        if (logbufcnt == buflen - 1)
-        {
-          logbufcnt = 0;
+        inbuf[tel] = 0; //add terminater
+        //Decode serial data
+        if (BufComp(inbuf, idbuf, tel) && tel == 4){
+            bot.sendMessage(TelegramChatId, "Mijn deurbel!!!\n", "Markdown");
+            TelnetStream.println("Mijn deurbel!!!");
+            Serial.println("Mijn deurbel!!!");
+            RingDetect();
+            belstamp = millis();
+            digitalWrite(displayOn, true);
+            displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
+            SendDisplayOn();
+        }else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4){
+            bot.sendMessage(TelegramChatId, "Deurbel\n", "Markdown");
+            TelnetStream.println("Deurbel!!!");
+            Serial.println("Deurbel!!!");
+            digitalWrite(displayOn, true);
+            displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+            SendDisplayOn();
         }
-        if (tel == buflen - 1)
-        {
-          tel = 0;
-        }
-        logbuf[logbufcnt++] = inbuf[tel];
-        Serial.print(inbuf[tel], HEX);
-        Serial.print(" ");
-        yield();
-        tel++;
-      }
     }
-    Serial.println();
-    inbuf[tel] = 0;
-    if (BufComp(inbuf, idbuf, tel) && tel == 4)
-    {
-      bot.sendMessage(TelegramChatId, "Mijn deurbel!!!\n", "Markdown");
-      TelnetStream.println("Mijn deurbel!!!");
-      RingDetect();
-      belstamp = millis();
-      digitalWrite(displayOn, true);
-      displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
-      SendDisplayOn();
+    //reset buffer after timeout
+    if ((logstamp + 10000) < millis() && logbufcnt > 0){
+        SendSerialData(logbuf, logbufcnt);
+        logbufcnt = 0;
+    }
+    //turn display off after timeout
+    if (digitalRead(displayOn) == true && displayoff < millis()){ //turn display off after timeout
+        SendDisplayOff();
+        digitalWrite(displayOn, false);
+    }
 
-    }
-    else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4)
-    {
-      //bot.sendMessage(TelegramChatId, "Deurbel\n", "Markdown");
-      TelnetStream.println("Deurbel!!!");
-      digitalWrite(displayOn, true);
-      displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
-      SendDisplayOn();
-    }
-  }
-  //reset buffer after timeout
-  if ((logstamp + 10000) < millis() && logbufcnt > 0) 
-  {
-    SendSerialData(logbuf, logbufcnt);
-    logbufcnt = 0;
-  }
-  //turn display off after timeout
-  if (digitalRead(displayOn) == true && displayoff < millis()) //turn display off after timeout
-  {
-    SendDisplayOff();
-    digitalWrite(displayOn, false);
-  }
-  if (millis() > lastTimeBotRan + botRequestDelay)  {
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    while (numNewMessages) {
-      Serial.println("got response");
-      handleNewMessages(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    }
+    if (millis() > lastTimeBotRan + botRequestDelay)  {
+        int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+        while (numNewMessages) {
+            Serial.println("got response");
+            handleNewMessages(numNewMessages);
+            numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+        }
     lastTimeBotRan = millis();
-  }
-
+    }
 }
