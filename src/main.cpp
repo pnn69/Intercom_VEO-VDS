@@ -98,39 +98,36 @@ PubSubClient client(espClient);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 3600, 60000);
 
-/* ***************************************************************************
- */
-/* * Over the air setup */
-/* * If timers are used kill the processes befor going to dwonload the new
- * firmware */
-/* * To realise that kill them in the function ArduinoOTA.onStart */
-/* ***************************************************************************
- */
-void setup_OTA()
-{
-  char buf[30];
-  Serial.println();
-  Serial.print("[SETUP] OTA...");
-  sprintf(buf, "%s-%02x:%02x:%02x:%02x:%02x:%02x", host, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  ArduinoOTA.setHostname(buf);
-  ArduinoOTA.onStart([]() {
-    /* switch off all processes here!!!!! */
+/* ****************************************************************************/
+/* Over the air setup */
+/* If timers are used kill the processes befor going to dwonload the new */
+/* firmware */
+/* To realise that kill them in the function ArduinoOTA.onStart */
+/* ****************************************************************************/
+void setup_OTA(){
+    char buf[30];
     Serial.println();
-    Serial.println("Recieving new firmware now!");
-  });
-  ArduinoOTA.onEnd([]() {
-    /* do stuff after update here!! */
-    Serial.println("\nRecieving done!");
-    Serial.println("Storing in memory and reboot!");
-    Serial.println();
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) { ESP.restart(); });
-  /* setup the OTA server */
-  ArduinoOTA.begin();
-  Serial.println("...done!");
+    Serial.print("[SETUP] OTA...");
+    sprintf(buf, "%s-%02x:%02x:%02x:%02x:%02x:%02x", host, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ArduinoOTA.setHostname(buf);
+    ArduinoOTA.onStart([]() {
+        /* switch off all processes here!!!!! */
+        Serial.println();
+        Serial.println("Recieving new firmware now!");
+    });
+    ArduinoOTA.onEnd([]() {
+        /* do stuff after update here!! */
+        Serial.println("\nRecieving done!");
+        Serial.println("Storing in memory and reboot!");
+        Serial.println();
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) { ESP.restart(); });
+    /* setup the OTA server */
+    ArduinoOTA.begin();
+    Serial.println("...done!");
 }
 
 /* ***************************************************************************
@@ -281,10 +278,12 @@ void RingDetect(void){
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    TelnetStream.println(msg);
     doc["idx"] = idx_txt;
     doc["svalue"] = "Deurbel";
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    TelnetStream.println(msg);
 }
 
 void SendDisplayOn(void){
@@ -294,6 +293,7 @@ void SendDisplayOn(void){
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    TelnetStream.println(msg);
 }
 
 void SendDisplayOff(void){
@@ -303,6 +303,7 @@ void SendDisplayOff(void){
     doc["nvalue"] = 0;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    TelnetStream.println(msg);
 }
 
 void array_to_string(char array[], unsigned int len, char buffer[]){
@@ -321,16 +322,17 @@ void SendSerialData(char *b, int leng){
     doc["svalue"] = msg;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    TelnetStream.println(msg);
 }
 
 int BufComp(char buf1[], char buf2[], int t){
     int n;
-    if (t > 4)
+    if (t > 4){ 
         return 0;
-    for (n = 0; n < t; n++)
-    {
+    }
+    for (n = 0; n < t; n++){
         if (buf1[n] != buf2[n])
-        return 0;
+            return 0;
     }
     return 1;
 }
