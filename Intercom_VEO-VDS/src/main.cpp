@@ -15,7 +15,7 @@
  Otherwise it has no effect.
  Needed for the long pacages generatied by domotiz
 */
-#define MQTT_MAX_PACKET_SIZE 500
+#define MQTT_MAX_PACKET_SIZE 400
 #include <PubSubClient.h>
 
 
@@ -41,8 +41,6 @@
 #define sys_open_start 1
 #define sys_open_front_door 3
 #define sys_send_ipadress 2
-#define sys_send_dispalay_on 4
-#define sys_send_dispalay_off 5
 
 // your Bot Token (Get from Botfather Telegram)
 #define botToken "1045368619:AAGtCFl__nxhqg7W3JQXbSHDb5gNR3pBC7E"
@@ -188,11 +186,11 @@ void callback(char *topic, byte *payload, int length){
             TelnetStream.println("Display on command detected");
             displayoff = 1000 * 60 * 60 * 4 + millis();  //turn dispay on for 4 hours
             bot.sendMessage(TelegramChatId, "Display on\n", "Markdown");
-            sys_status = sys_send_dispalay_on;
+            digitalWrite(displayOn, true);
         }else{
             Serial.println("Display off command detected");
             TelnetStream.println("Display off command detected");
-            sys_status = sys_send_dispalay_off;
+            displayoff = millis();
         }
     }
     if (r_idx == 999){
@@ -276,13 +274,11 @@ void OpenDoor(void){
 void RingDetect(void){
     Serial.println("Deurbel notification to MQTT");
     TelnetStream.println("Deurbel notification to MQTT");
-    doc.clear();
     doc["idx"] = idx_bel;
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
     TelnetStream.println(msg);
-    doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = "Deurbel";
     serializeJson(doc, msg);
@@ -290,11 +286,9 @@ void RingDetect(void){
     TelnetStream.println(msg);
 }
 
-void DisplayOn(void){
-    digitalWrite(displayOn, true);
+void SendDisplayOn(void){
     Serial.println("Dispay on notification to MQTT");
     TelnetStream.println("Dispay on notification to MQTT");
-    doc.clear();
     doc["idx"] = idx_display;
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
@@ -302,11 +296,9 @@ void DisplayOn(void){
     TelnetStream.println(msg);
 }
 
-void DisplayOff(void){
-    digitalWrite(displayOn, false);
+void SendDisplayOff(void){
     Serial.println("Dispay off notification to MQTT");
     TelnetStream.println("Dispay off notification to MQTT");
-    doc.clear();
     doc["idx"] = idx_display;
     doc["nvalue"] = 0;
     serializeJson(doc, msg);
@@ -326,7 +318,6 @@ void array_to_string(char array[], unsigned int len, char buffer[]){
 
 void SendSerialData(char *b, int leng){
     array_to_string(b, leng, msg);
-    doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = msg;
     serializeJson(doc, msg);
@@ -393,16 +384,8 @@ void loop(){
     }else{
         client.loop();
     }
-    if(sys_status == sys_send_dispalay_on){
-        DisplayOn();
-        sys_status = sys_idle;
-    }
-    if(sys_status == sys_send_dispalay_off){
-        DisplayOff();
-        sys_status = sys_idle;
-    }
     if(sys_status == sys_send_ipadress){
-        sys_status = sys_idle;
+        sys_status = 0;
         String ms = WiFi.localIP().toString();
         bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
         TelnetStream.println("Ipaddress: " + ms);
@@ -456,14 +439,16 @@ void loop(){
             Serial.println("Mijn deurbel!!!");
             RingDetect();
             belstamp = millis();
-            DisplayOn();
+            digitalWrite(displayOn, true);
             displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
+            SendDisplayOn();
         }else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4){
             bot.sendMessage(TelegramChatId, "Deurbel\n", "Markdown");
             TelnetStream.println("Deurbel!!!");
             Serial.println("Deurbel!!!");
-            DisplayOn();
+            digitalWrite(displayOn, true);
             displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+            SendDisplayOn();
         }
     }
     //reset buffer after timeout
@@ -473,7 +458,8 @@ void loop(){
     }
     //turn display off after timeout
     if (digitalRead(displayOn) == true && displayoff < millis()){ //turn display off after timeout
-        DisplayOff();
+        SendDisplayOff();
+        digitalWrite(displayOn, false);
     }
 
     if (millis() > lastTimeBotRan + botRequestDelay)  {
