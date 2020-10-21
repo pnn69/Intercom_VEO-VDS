@@ -248,148 +248,130 @@ void handleNewMessages(int numNewMessages) {
 /*****************************************************************************/
 // Blue led blink cycle
 /*****************************************************************************/
-void Blink()
-{
-  if (TckCnt == 1)
-  {
-    digitalWrite(BlueLed, BlueLedOn);
-    //TelnetStream.print(millis()/1000 + "seconds online");
-  }
-  if (TckCnt == 2)
-  {
-    digitalWrite(BlueLed, BlueLedOff);
-  }
-  if (TckCnt >= 11)
-  {
-    TckCnt = 0;
-  }
-  TckCnt++;
-   
+void Blink(){
+    if (TckCnt == 1){
+        digitalWrite(BlueLed, BlueLedOn);
+        //TelnetStream.print(millis()/1000 + "seconds online");
+    }
+    if (TckCnt == 2){
+        digitalWrite(BlueLed, BlueLedOff);
+    }
+    if (TckCnt >= 11){
+        TckCnt = 0;
+    }
+    TckCnt++;
 }
 
-void OpenDoor(void)
-{
-  digitalWrite(Video, 0);
-  delay(250);
-  digitalWrite(Key, 0);
-  bot.sendMessage(TelegramChatId, "Galley door openend\n", "Markdown");
-  TelnetStream.println("Galley door openend\n");
-  delay(1500);
-  digitalWrite(Video, 1);
-  delay(1000);
-  digitalWrite(Key, 1);
+void OpenDoor(void){
+    digitalWrite(Video, 0);
+    delay(250);
+    digitalWrite(Key, 0);
+    bot.sendMessage(TelegramChatId, "Galley door openend\n", "Markdown");
+    TelnetStream.println("Galley door openend\n");
+    delay(1500);
+    digitalWrite(Video, 1);
+    delay(1000);
+    digitalWrite(Key, 1);
 }
 
-void RingDetect(void)
-{
-  Serial.println("Deurbel notification to MQTT");
-  TelnetStream.println("Deurbel notification to MQTT");
-  doc["idx"] = idx_bel;
-  doc["nvalue"] = 1;
-  serializeJson(doc, msg);
-  client.publish("domoticz/in", msg);
-
-  doc["idx"] = idx_txt;
-  doc["svalue"] = "Deurbel";
-  serializeJson(doc, msg);
-  client.publish("domoticz/in", msg);
+void RingDetect(void){
+    Serial.println("Deurbel notification to MQTT");
+    TelnetStream.println("Deurbel notification to MQTT");
+    doc["idx"] = idx_bel;
+    doc["nvalue"] = 1;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
+    doc["idx"] = idx_txt;
+    doc["svalue"] = "Deurbel";
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
 }
 
-void SendDisplayOn(void)
-{
-  Serial.println("Dispay on notification to MQTT");
-  TelnetStream.println("Dispay on notification to MQTT");
-  doc["idx"] = idx_display;
-  doc["nvalue"] = 1;
-  serializeJson(doc, msg);
-  client.publish("domoticz/in", msg);
+void SendDisplayOn(void){
+    Serial.println("Dispay on notification to MQTT");
+    TelnetStream.println("Dispay on notification to MQTT");
+    doc["idx"] = idx_display;
+    doc["nvalue"] = 1;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
 }
 
-void SendDisplayOff(void)
-{
-  Serial.println("Dispay off notification to MQTT");
-  TelnetStream.println("Dispay off notification to MQTT");
-  doc["idx"] = idx_display;
-  doc["nvalue"] = 0;
-  serializeJson(doc, msg);
-  client.publish("domoticz/in", msg);
+void SendDisplayOff(void){
+    Serial.println("Dispay off notification to MQTT");
+    TelnetStream.println("Dispay off notification to MQTT");
+    doc["idx"] = idx_display;
+    doc["nvalue"] = 0;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
 }
 
-void array_to_string(char array[], unsigned int len, char buffer[])
-{
-  for (unsigned int i = 0; i < len; i++)
-  {
-    byte nib1 = (array[i] >> 4) & 0x0F;
-    byte nib2 = (array[i] >> 0) & 0x0F;
-    buffer[i * 2 + 0] = nib1 < 0xA ? '0' + nib1 : 'A' + nib1 - 0xA;
-    buffer[i * 2 + 1] = nib2 < 0xA ? '0' + nib2 : 'A' + nib2 - 0xA;
-  }
-  buffer[len * 2] = '\0';
+void array_to_string(char array[], unsigned int len, char buffer[]){
+    for (unsigned int i = 0; i < len; i++){
+        byte nib1 = (array[i] >> 4) & 0x0F;
+        byte nib2 = (array[i] >> 0) & 0x0F;
+        buffer[i * 2 + 0] = nib1 < 0xA ? '0' + nib1 : 'A' + nib1 - 0xA;
+        buffer[i * 2 + 1] = nib2 < 0xA ? '0' + nib2 : 'A' + nib2 - 0xA;
+    }
+    buffer[len * 2] = '\0';
 }
 
-void SendSerialData(char *b, int leng)
-{
-  array_to_string(b, leng, msg);
-  doc["idx"] = idx_txt;
-  doc["svalue"] = msg;
-  serializeJson(doc, msg);
-  client.publish("domoticz/in", msg);
+void SendSerialData(char *b, int leng){
+    array_to_string(b, leng, msg);
+    doc["idx"] = idx_txt;
+    doc["svalue"] = msg;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
 }
 
-int BufComp(char buf1[], char buf2[], int t)
-{
-  int n;
-  if (t > 4)
-    return 0;
-  for (n = 0; n < t; n++)
-  {
-    if (buf1[n] != buf2[n])
-      return 0;
-  }
-  return 1;
+int BufComp(char buf1[], char buf2[], int t){
+    int n;
+    if (t > 4)
+        return 0;
+    for (n = 0; n < t; n++)
+    {
+        if (buf1[n] != buf2[n])
+        return 0;
+    }
+    return 1;
 }
 
-void setup()
-{
-  pinMode(Video, OUTPUT);
-  pinMode(Key, OUTPUT);
-  pinMode(displayOn, OUTPUT);
-  digitalWrite(displayOn, 0);
-  pinMode(BlueLed, OUTPUT);
-  digitalWrite(Video, 1);
-  digitalWrite(Key, 1);
-
-  // put your setup code here, to run once:
-  flipper.attach(1, Blink); // call blink eatch 1 sec
-  Serial.begin(115200);
-  swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 95, 11);
-  delay(100);
-  Serial.println("Booting...");
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.printf("[SETUP] BOOT WAIT ...");
-  while (WiFi.status() != WL_CONNECTED)
-  {
+void setup(){
+    pinMode(Video, OUTPUT);
+    pinMode(Key, OUTPUT);
+    pinMode(displayOn, OUTPUT);
+    digitalWrite(displayOn, 0);
+    pinMode(BlueLed, OUTPUT);
+    digitalWrite(Video, 1);
+    digitalWrite(Key, 1);
+    // put your setup code here, to run once:
+    flipper.attach(1, Blink); // call blink eatch 1 sec
+    Serial.begin(115200);
+    swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 95, 11);
     delay(100);
-    Serial.print(".");
-  }
-  WiFi.macAddress(mac);
-  setup_OTA();
-  sprintf(msg, "MAC adress: %02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2],
-          mac[3], mac[4], mac[5]);
-  Serial.print(msg);
-  Serial.println();
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP()); // You can get IP address assigned to ESP
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
-  reconnect();
-  teleclient.setInsecure();
-  bot.sendMessage(TelegramChatId, "Intercom rebooted...\n", "Markdown");
-  TelnetStream.begin();
-  Serial.println("READY...");
-  
+    Serial.println("Booting...");
+    WiFi.disconnect();
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    Serial.printf("[SETUP] BOOT WAIT ...");
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(100);
+        Serial.print(".");
+    }
+    WiFi.macAddress(mac);
+    setup_OTA();
+    sprintf(msg, "MAC adress: %02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    Serial.print(msg);
+    Serial.println();
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP()); // You can get IP address assigned to ESP
+    client.setServer(mqtt_server, 1883);
+    client.setCallback(callback);
+    reconnect();
+    teleclient.setInsecure();
+    bot.sendMessage(TelegramChatId, "Intercom rebooted...\n", "Markdown");
+    TelnetStream.begin();
+    Serial.println("READY...");
 }
 
 void loop(){
