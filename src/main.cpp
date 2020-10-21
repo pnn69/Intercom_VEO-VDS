@@ -18,7 +18,6 @@
 #define MQTT_MAX_PACKET_SIZE 500
 #include <PubSubClient.h>
 
-
 #if defined(ESP8266) && !defined(D5)
 #define D5 (14)
 #define D6 (12)
