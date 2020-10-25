@@ -8,6 +8,8 @@
 #include <UniversalTelegramBot.h>
 #include <WiFiClientSecure.h>
 #include <TelnetStream.h>
+#include "credentials.h"
+
 /*
  change this in PubSubClient.h
  #define MQTT_MAX_PACKET_SIZE 128
@@ -56,21 +58,15 @@ int botRequestDelay = 2000;
 unsigned long lastTimeBotRan;
 
 Ticker flipper;
-
-//#define work
-#ifdef work
-const char *ssid = "airsupplies";
-const char *password = "02351228133648477429";
-const char *mqtt_server = "95.97.132.178";
-const char *domoticz_server = "95.97.132.178";
-#else
-const char *ssid = "NicE_Engineering_UPC";
-const char *password = "1001100110";
-const char *mqtt_server = "192.168.1.11";
-const char *domoticz_server = "192.168.1.11";
+#ifndef CREDENTIALS_H
+const char *ssid = "YOUR SSID";
+const char *password = "YOUR PASSW";
+const char *mqtt_server = "xxx.xxx.xxx.xxx";
+const char *domoticz_server = "xxx.xxx.xxx.xxx";
+const char *domoticz_port = "xxxx";
+const char *host = "YOUR MQTT PASSW";
 #endif
-const char *domoticz_port = "8084";
-const char *host = "alibaba";
+
 const char idx_txt = 24;     // IDX
 const char idx_bel = 4;      // IDX of deurbel
 const char idx_sesam = 12;   // IDX
