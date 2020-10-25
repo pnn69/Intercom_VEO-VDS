@@ -74,7 +74,7 @@ const char idx_display = 30; // IDX dispay switch
 const char idx_doorbutton = 34; // IDX doorbell button
 
 SoftwareSerial swSer;
-unsigned long timestamp;
+unsigned long serialstamp;
 unsigned long belstamp;
 unsigned long displayoff;
 bool BellOn = false;
@@ -422,7 +422,7 @@ void loop(){
     if(sys_status == sys_send_ipadress){
         sys_status = sys_idle;
         String ms = WiFi.localIP().toString();
-        bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
+        bot.sendMessage(TelegramChatId,"VEO ipaddress: " + ms, "Markdown");
         TelnetStream.println("Ipaddress: " + ms);
 
     }
@@ -451,10 +451,11 @@ void loop(){
     }
     //Check for incomming serial data form intercom bus.
     while (swSer.available() > 0){
-        timestamp = millis();
+        serialstamp = millis();
         int tel = 0;
-        while (timestamp + 500 > millis()){
+        while (serialstamp + 50 > millis()){
             while (swSer.available() > 0){
+                serialstamp = millis();
                 inbuf[tel] = swSer.read();
                 if (logbufcnt == 0){
                     logstamp = millis();
@@ -466,9 +467,8 @@ void loop(){
                     tel = 0;
                 }
                 logbuf[logbufcnt++] = inbuf[tel];
-                Serial.print(inbuf[tel], HEX);
-                Serial.print(" ");
-                yield();
+                TelnetStream.print(inbuf[tel], HEX);
+                //Serial.print(inbuf[tel], HEX);
                 tel++;
             }
         }
@@ -480,7 +480,6 @@ void loop(){
             SetDisplayOn();
             displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
         }else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4){
-            //bot.sendMessage(TelegramChatId, "Deurbel\n", "Markdown");
             sprintf(msg,"Deurbel");
             bot.sendMessage(TelegramChatId, msg, "Markdown");
             doc.clear();
@@ -495,7 +494,7 @@ void loop(){
         }
     }
     //reset buffer after timeout
-    if ((logstamp + 10000) < millis() && logbufcnt > 0){
+    if ((serialstamp + 1000) < millis() && logbufcnt > 0){
         SendSerialData(logbuf, logbufcnt);
         logbufcnt = 0;
     }
