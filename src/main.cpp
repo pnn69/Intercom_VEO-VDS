@@ -59,12 +59,12 @@ unsigned long lastTimeBotRan;
 
 Ticker flipper;
 #ifndef CREDENTIALS_H
-const char *ssid = "YOUR SSID";
-const char *password = "YOUR PASSW";
-const char *mqtt_server = "xxx.xxx.xxx.xxx";
-const char *domoticz_server = "xxx.xxx.xxx.xxx";
-const char *domoticz_port = "xxxx";
-const char *host = "YOUR MQTT PASSW";
+    const char *ssid = "YOUR SSID";
+    const char *password = "YOUR PASSW";
+    const char *mqtt_server = "xxx.xxx.xxx.xxx";
+    const char *domoticz_server = "xxx.xxx.xxx.xxx";
+    const char *domoticz_port = "xxxx";
+    const char *host = "YOUR MQTT PASSW";
 #endif
 
 const char idx_txt = 24;     // IDX
