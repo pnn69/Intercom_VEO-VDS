@@ -35,8 +35,6 @@
 #define displayOn D0
 #define Key D5
 #define BlueLed 2 // Blue led
-#define mqtt_user "alibabba"
-#define mqtt_password "sesamopenu"
 #define BlueLedOff HIGH
 #define BlueLedOn LOW
 #define sys_idle 0
@@ -67,29 +65,27 @@ Ticker flipper;
     const char *host = "YOUR MQTT PASSW";
 #endif
 
-const char idx_txt = 24;     // IDX
-const char idx_bel = 4;      // IDX of deurbel
-const char idx_sesam = 12;   // IDX
-const char idx_display = 30; // IDX dispay switch
+const char idx_txt = 24;        // IDX
+const char idx_bel = 4;         // IDX of deurbel
+const char idx_sesam = 12;      // IDX
+const char idx_display = 30;    // IDX dispay switch
 const char idx_doorbutton = 34; // IDX doorbell button
-
+const char idx_debug = 29;      // IDX debug messages
 SoftwareSerial swSer;
 unsigned long serialstamp;
 unsigned long belstamp;
 unsigned long displayoff;
+unsigned long doorkeystamp;
 bool BellOn = false;
 bool DisplayOn = false;
+bool DoorKeyOn = false;
 
 const int buflen = 100;
 char inbuf[buflen];
-char logbuf[buflen];
-int logbufcnt = 0;
-unsigned long logstamp;
-char idbuf[] = {0x59, 0xF0, 0xA9, 0x05}; //Doorbel code 820
+char idMyBell[] = {0x59, 0xF0, 0xA9, 0x05}; //Doorbel code 820
 char msg[150];
 byte mac[6];
-char stamp[10];
-char TckAck, TckCnt = 0;
+char TckCnt = 0;
 char sys_status = sys_idle;
 
 WiFiClient espClient;
@@ -109,7 +105,7 @@ void setup_OTA(){
     char buf[30];
     Serial.println();
     Serial.print("[SETUP] OTA...");
-    sprintf(buf, "%s-%02x:%02x:%02x:%02x:%02x:%02x", host, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    sprintf(buf, "%s-%02x:%02x:%02x:%02x:%02x:%02x", mqtt_user, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     ArduinoOTA.setHostname(buf);
     ArduinoOTA.onStart([]() {
         /* switch off all processes here!!!!! */
@@ -146,13 +142,12 @@ void reconnect(){
             // ... and resubscribe
             client.subscribe("domoticz/out");
             Serial.println("Lucky loggin in");
-            TckAck = 10;
         }else{
             Serial.print("failed, rc=");
             Serial.print(client.state());
             Serial.println(" try again in 5 seconds");
             // Wait 5 seconds before retrying
-        delay(5000);
+            delay(5000);
         }
     }
 }
@@ -243,22 +238,20 @@ void Blink(){
 
 void OpenDoor(void){
     digitalWrite(Key, 0);
-    bot.sendMessage(TelegramChatId, "Galley door openend\n", "Markdown");
-    TelnetStream.println("Galley door openend\n");
+    DoorKeyOn = true;
+    sprintf(msg,"Key open door pushed");
+    bot.sendMessage(TelegramChatId, msg, "Markdown");
+    TelnetStream.println(msg);
+    doc.clear();
+    doc["idx"] = idx_debug;
+    doc["svalue"] = msg;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
     doc.clear();
     doc["idx"] = idx_doorbutton;
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    delay(500);
-    doc.clear();
-    doc["idx"] = idx_txt;
-    doc["svalue"] = "Open door button activated";
-    serializeJson(doc, msg);
-    client.publish("domoticz/in", msg);
-    TelnetStream.println(msg);
-    delay(1000);
-    digitalWrite(Key, 1);
 }
 
 void RingDetect(void){
@@ -276,8 +269,6 @@ void RingDetect(void){
     doc["svalue"] = msg;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    TelnetStream.println(msg);
-    Serial.println(msg);
     BellOn = true;
 }
 
@@ -288,7 +279,7 @@ void SetDisplayOn(void){
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sprintf(msg,"Dispay on");
+    sprintf(msg,"VEO Dispay on");
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = msg;
@@ -302,11 +293,12 @@ void SetDisplayOn(void){
 void SetDisplayOff(void){
     digitalWrite(displayOn, false);
     doc.clear();
+    delay(150);
     doc["idx"] = idx_display;
     doc["nvalue"] = 0;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sprintf(msg,"Dispay off");
+    sprintf(msg,"VEO Display off");
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = msg;
@@ -337,14 +329,15 @@ void SendSerialData(char *b, int leng){
     TelnetStream.println(msg);
 }
 
-int BufComp(char buf1[], char buf2[], int t){
-    int n;
-    if (t > 4){ 
-        return 0;
+int BufComp(char buf1[],int l, char buf2[], int t){
+    int n=0;
+    if (l < t) return 0;
+    while(buf1[n] != buf2[0]){
+        n++;
+        if(n == l) return 0;
     }
-    for (n = 0; n < t; n++){
-        if (buf1[n] != buf2[n])
-            return 0;
+    for (;t>0 ;t--){
+        if (buf1[n+t-1] != buf2[t-1]) return 0;
     }
     return 1;
 }
@@ -394,12 +387,12 @@ void setup(){
     TelnetStream.println(msg);
     bot.sendMessage(TelegramChatId, "Intercom rebooted...\n", "Markdown");
     String ms = WiFi.localIP().toString();
-    bot.sendMessage(TelegramChatId,"Ipaddress: " + ms, "Markdown");
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = ms;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    sys_status = sys_send_ipadress;
     Serial.println("READY...");
 }
 
@@ -412,26 +405,25 @@ void loop(){
         client.loop();
     }
     if(sys_status == sys_send_display_on){
-        SetDisplayOn();
         sys_status = sys_idle;
+        SetDisplayOn();
     }
     if(sys_status == sys_send_display_off){
-        SetDisplayOff();
         sys_status = sys_idle;
+        SetDisplayOff();
     }
     if(sys_status == sys_send_ipadress){
         sys_status = sys_idle;
         String ms = WiFi.localIP().toString();
         bot.sendMessage(TelegramChatId,"VEO ipaddress: " + ms, "Markdown");
-        TelnetStream.println("Ipaddress: " + ms);
-
     }
     if(sys_status == sys_open_start){
         sys_status = sys_idle;
         flipper.detach(); // stop blink
         digitalWrite(BlueLed, BlueLedOn);
-        if (millis() < belstamp  + 100000){ // only open door if the doorbel downstairs is pushed.
+        if (millis() < belstamp  + 1000 * 60 * 5){ // only open door if the doorbel downstairs is pushed within 5 minutes.
             OpenDoor();
+            doorkeystamp = millis();
             displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 2 minuts
         }else{
             sprintf(msg,"Galley door prefend for opening!");
@@ -441,7 +433,7 @@ void loop(){
             doc["idx"] = idx_txt;
             doc["svalue"] = msg;
             serializeJson(doc, msg);
-            client.publish("domoticz/in", msg);
+           client.publish("domoticz/in", msg);
             displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 2 minuts
         }
         flipper.attach(1, Blink); // call blink eatch 1 sec
@@ -453,33 +445,23 @@ void loop(){
     while (swSer.available() > 0){
         serialstamp = millis();
         int tel = 0;
-        while (serialstamp + 50 > millis()){
+        while (serialstamp + 1000 > millis()){
             while (swSer.available() > 0){
+                inbuf[tel++] = swSer.read();
                 serialstamp = millis();
-                inbuf[tel] = swSer.read();
-                if (logbufcnt == 0){
-                    logstamp = millis();
-                }
-                if (logbufcnt == buflen - 1){
-                    logbufcnt = 0;
-                }
-                if (tel == buflen - 1){
-                    tel = 0;
-                }
-                logbuf[logbufcnt++] = inbuf[tel];
-                TelnetStream.print(inbuf[tel], HEX);
-                //Serial.print(inbuf[tel], HEX);
-                tel++;
+                if (tel == buflen)tel--;
             }
         }
         inbuf[tel] = 0; //add terminater
         //Decode serial data
-        if (BufComp(inbuf, idbuf, tel) && tel == 4){
+        array_to_string(inbuf,tel,msg);
+        TelnetStream.println(msg);
+        if(BufComp(inbuf,tel,idMyBell,4)){              //Check data for ring command My home
             RingDetect();
             belstamp = millis();
             SetDisplayOn();
-            displayoff = 1000 * 60 * 5 + millis();  //turn dispay on for 5 minuts
-        }else if (BufComp(inbuf, idbuf, tel - 1) && tel == 4){
+            displayoff = 1000 * 60 * 5 + millis();      //turn dispay on for 5 minuts
+        }else if(BufComp(inbuf,tel,idMyBell,3)){        //Check data for ring command other home's
             sprintf(msg,"Deurbel");
             bot.sendMessage(TelegramChatId, msg, "Markdown");
             doc.clear();
@@ -488,15 +470,16 @@ void loop(){
             serializeJson(doc, msg);
             client.publish("domoticz/in", msg);
             TelnetStream.println(msg);
-            Serial.println(msg);
             SetDisplayOn();
             displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
         }
-    }
-    //reset buffer after timeout
-    if ((serialstamp + 1000) < millis() && logbufcnt > 0){
-        SendSerialData(logbuf, logbufcnt);
-        logbufcnt = 0;
+        //log data
+        array_to_string(inbuf,tel,msg);
+        doc.clear();
+        doc["idx"] = idx_debug;
+        doc["svalue"] = msg;
+        serializeJson(doc, msg);
+        client.publish("domoticz/in", msg);
     }
     //turn display off after timeout
     if (DisplayOn == true && displayoff < millis()){ //turn display off after timeout
@@ -508,6 +491,17 @@ void loop(){
         doc.clear();
         doc["idx"] = idx_bel;
         doc["nvalue"] = 0;
+        serializeJson(doc, msg);
+        client.publish("domoticz/in", msg);
+    }
+    if (DoorKeyOn && millis() > doorkeystamp  + 5000){ //Relase door key knob
+        DoorKeyOn = false;
+        digitalWrite(Key, 1);
+        sprintf(msg,"Key open door released");
+        TelnetStream.println(msg);
+        doc.clear();
+        doc["idx"] = idx_debug;
+        doc["svalue"] = msg;
         serializeJson(doc, msg);
         client.publish("domoticz/in", msg);
     }
