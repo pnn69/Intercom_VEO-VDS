@@ -70,7 +70,7 @@ const char idx_sesam = 12;      // IDX
 const char idx_display = 30;    // IDX dispay switch
 const char idx_doorbutton = 34; // IDX doorbell button
 const char idx_debug = 29;      // IDX debug messages
-SoftwareSerial swSer;
+SoftwareSerial swSer(D7);
 unsigned long serialstamp;
 unsigned long belstamp;
 unsigned long displayoff;
@@ -82,7 +82,8 @@ bool DoorKeyOn = false;
 
 const int buflen = 100;
 char inbuf[buflen];
-char idMyBell[] = {0x59, 0xF0, 0xA9, 0x05}; //Doorbel code 820
+//char idMyBell[10] = {0x59, 0xF0, 0xA9, 0x05}; //Doorbel code 820
+char idMyBell[10] = {0xA9, 0x05}; //Doorbel code 820
 char msg[150];
 byte mac[6];
 char TckCnt = 0;
@@ -351,7 +352,9 @@ void setup(){
     // put your setup code here, to run once:
     flipper.attach(1, Blink); // call blink eatch 1 sec
     Serial.begin(115200);
-    swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 32, 11);
+    //VEO baudrate 1200Baud -> 9.167 ms/Character
+    //swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 32, 11);
+    swSer.begin(1200);
     delay(100);
     Serial.println("Booting...");
     WiFi.disconnect();
@@ -450,11 +453,9 @@ void loop(){
         int len = strlen(idMyBell);
         int n = 0;
         MyBelDetect = false;
-        while (serialstamp + 2000 > millis() && MyBelDetect == false){
+        while (serialstamp + 150 > millis() && MyBelDetect == false){
             while (swSer.available() > 0){
                 inbuf[tel] = swSer.read();
-                serialstamp = millis();
-                if (tel == buflen)tel--;
                 if(inbuf[tel] == idMyBell[n++])len--;
                 else{
                     n=0;
@@ -465,10 +466,11 @@ void loop(){
                     }
                 }
                 if(len == 0) MyBelDetect = true;
-                tel++;
+                if (tel < buflen)tel++;
             }
         }
         inbuf[tel] = 0; //add terminater
+
         //Decode serial data
         array_to_string(inbuf,tel,msg);
         TelnetStream.println(msg);
