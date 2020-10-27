@@ -279,14 +279,14 @@ void SetDisplayOn(void){
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sprintf(msg,"VEO Dispay on");
+    sprintf(msg,"Dispay on");
+    TelnetStream.println(msg);
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = msg;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
     Serial.println(msg);
-    TelnetStream.println(msg);
     DisplayOn = true;
 }
 
@@ -298,14 +298,14 @@ void SetDisplayOff(void){
     doc["nvalue"] = 0;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sprintf(msg,"VEO Display off");
+    sprintf(msg,"Display off");
+    TelnetStream.println(msg);
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = msg;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
     Serial.println(msg);
-    TelnetStream.println(msg);
     DisplayOn = false;
 }
 
@@ -331,16 +331,24 @@ void SendSerialData(char *b, int leng){
 
 int BufComp(char buf1[],int l, char buf2[], int t){
     int n=0;
+    int p=0;
+    int len = t;
     if (l < t) return 0;
-    while(buf1[n] != buf2[0]){
-        n++;
-        if(n == l) return 0;
+    for(int tel=0;tel< l;tel++){
+        if(buf1[p++] == buf2[n++]) len--;
+        else{
+            n=0;
+            len = t;
+            if(buf1[p-1] == buf2[0]){
+                len--;
+                n++;
+            }
+        }
+        if(len == 0) return 1;
     }
-    for (;t>0 ;t--){
-        if (buf1[n+t-1] != buf2[t-1]) return 0;
-    }
-    return 1;
+    return 0;
 }
+
 
 void setup(){
     pinMode(Video, OUTPUT);
@@ -353,7 +361,7 @@ void setup(){
     // put your setup code here, to run once:
     flipper.attach(1, Blink); // call blink eatch 1 sec
     Serial.begin(115200);
-    swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 95, 11);
+    swSer.begin(1200, SWSERIAL_8N1, D7, D4, false, 32, 11);
     delay(100);
     Serial.println("Booting...");
     WiFi.disconnect();
@@ -385,15 +393,19 @@ void setup(){
     client.publish("domoticz/in", msg);
     Serial.println(msg);
     TelnetStream.println(msg);
-    bot.sendMessage(TelegramChatId, "Intercom rebooted...\n", "Markdown");
     String ms = WiFi.localIP().toString();
     doc.clear();
     doc["idx"] = idx_txt;
     doc["svalue"] = ms;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sys_status = sys_send_ipadress;
-    Serial.println("READY...");
+    sprintf(msg,"VEO intercom rebooted");
+    doc.clear();
+    doc["idx"] = idx_debug;
+    doc["svalue"] = msg;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
+     Serial.println("READY...");
 }
 
 void loop(){
@@ -464,14 +476,14 @@ void loop(){
         }else if(BufComp(inbuf,tel,idMyBell,3)){        //Check data for ring command other home's
             sprintf(msg,"Deurbel");
             bot.sendMessage(TelegramChatId, msg, "Markdown");
+            TelnetStream.println(msg);
             doc.clear();
             doc["idx"] = idx_txt;
             doc["svalue"] = msg;
             serializeJson(doc, msg);
             client.publish("domoticz/in", msg);
-            TelnetStream.println(msg);
             SetDisplayOn();
-            displayoff = 1000 * 60 * 2 + millis();  //turn dispay on for 1 minuts
+            displayoff = 1000 * 60 * 1 + millis();  //turn dispay on for 1 minuts
         }
         //log data
         array_to_string(inbuf,tel,msg);
