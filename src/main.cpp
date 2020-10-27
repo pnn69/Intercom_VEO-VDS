@@ -76,6 +76,7 @@ unsigned long belstamp;
 unsigned long displayoff;
 unsigned long doorkeystamp;
 bool BellOn = false;
+bool MyBelDetect = false;
 bool DisplayOn = false;
 bool DoorKeyOn = false;
 
@@ -446,18 +447,32 @@ void loop(){
     while (swSer.available() > 0){
         serialstamp = millis();
         int tel = 0;
-        while (serialstamp + 1000 > millis()){
+        int len = strlen(idMyBell);
+        int n = 0;
+        MyBelDetect = false;
+        while (serialstamp + 2000 > millis() && MyBelDetect == false){
             while (swSer.available() > 0){
-                inbuf[tel++] = swSer.read();
+                inbuf[tel] = swSer.read();
                 serialstamp = millis();
                 if (tel == buflen)tel--;
+                if(inbuf[tel] == idMyBell[n++])len--;
+                else{
+                    n=0;
+                    len = strlen(idMyBell);
+                    if(inbuf[tel] == idMyBell[0]){
+                        len--;
+                        n++;
+                    }
+                }
+                if(len == 0) MyBelDetect = true;
+                tel++;
             }
         }
         inbuf[tel] = 0; //add terminater
         //Decode serial data
         array_to_string(inbuf,tel,msg);
         TelnetStream.println(msg);
-        if(BufComp(inbuf,tel,idMyBell,4)){              //Check data for ring command My home
+        if(MyBelDetect == true){              //Check data for ring command My home
             RingDetect();
             belstamp = millis();
             SetDisplayOn();
