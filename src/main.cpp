@@ -9,14 +9,14 @@
 #include <WiFiClientSecure.h>
 #include <TelnetStream.h>
 #include "credentials.h"
-
 /*
  change this in PubSubClient.h
  #define MQTT_MAX_PACKET_SIZE 128
- #define MQTT_MAX_PACKET_SIZE 500
+ #define MQTT_MAX_PACKET_SIZE 400
  Put this line infront of the lib include.
  Otherwise it has no effect.
- Needed for the long pacages generatied by domotiz
+ Needed for the long pacages generatied by domotiz.
+ Local change like below does not seems to work.
 */
 #define MQTT_MAX_PACKET_SIZE 400
 #include <PubSubClient.h>
@@ -29,7 +29,6 @@
 #define D0 (16)
 #define TX (1)
 #endif
-
 
 #define Video D6
 #define displayOn D0
@@ -274,12 +273,13 @@ void RingDetect(void){
 
 void SetDisplayOn(void){
     digitalWrite(displayOn, true);
+    DisplayOn = true;
     doc.clear();
     doc["idx"] = idx_display;
     doc["nvalue"] = 1;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
-    sprintf(msg,"Dispay on");
+    sprintf(msg,"Display on");
     TelnetStream.println(msg);
     doc.clear();
     doc["idx"] = idx_txt;
@@ -287,11 +287,11 @@ void SetDisplayOn(void){
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
     Serial.println(msg);
-    DisplayOn = true;
 }
 
 void SetDisplayOff(void){
     digitalWrite(displayOn, false);
+    DisplayOn = false;
     doc.clear();
     delay(150);
     doc["idx"] = idx_display;
@@ -306,7 +306,6 @@ void SetDisplayOff(void){
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
     Serial.println(msg);
-    DisplayOn = false;
 }
 
 void array_to_string(char array[], unsigned int len, char buffer[]){
@@ -317,16 +316,6 @@ void array_to_string(char array[], unsigned int len, char buffer[]){
         buffer[i * 2 + 1] = nib2 < 0xA ? '0' + nib2 : 'A' + nib2 - 0xA;
     }
     buffer[len * 2] = '\0';
-}
-
-void SendSerialData(char *b, int leng){
-    array_to_string(b, leng, msg);
-    doc.clear();
-    doc["idx"] = idx_txt;
-    doc["svalue"] = msg;
-    serializeJson(doc, msg);
-    client.publish("domoticz/in", msg);
-    TelnetStream.println(msg);
 }
 
 int BufComp(char buf1[],int l, char buf2[], int t){
