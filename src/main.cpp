@@ -84,6 +84,7 @@ const int buflen = 100;
 char inbuf[buflen];
 //char idMyBell[10] = {0x59, 0xF0, 0xA9, 0x05}; //Doorbel code 820
 char idMyBell[10] = {0xA9, 0x05}; //Doorbel code 820
+char idBell[4] = {0xA9}; //Doorbel code 820
 char msg[150];
 byte mac[6];
 char TckCnt = 0;
@@ -479,7 +480,7 @@ void loop(){
             belstamp = millis();
             SetDisplayOn();
             displayoff = 1000 * 60 * 5 + millis();      //turn dispay on for 5 minuts
-        }else if(BufComp(inbuf,tel,idMyBell,3)){        //Check data for ring command other home's
+        }else if(BufComp(inbuf,tel,idBell,3)){        //Check data for ring command other home's
             sprintf(msg,"Deurbel");
             bot.sendMessage(TelegramChatId, msg, "Markdown");
             TelnetStream.println(msg);
