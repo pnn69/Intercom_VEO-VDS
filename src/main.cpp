@@ -271,6 +271,12 @@ void RingDetect(void){
     doc["svalue"] = msg;
     serializeJson(doc, msg);
     client.publish("domoticz/in", msg);
+    sprintf(msg,"Mijn deurbel");
+    doc.clear();
+    doc["idx"] = idx_debug;
+    doc["svalue"] = msg;
+    serializeJson(doc, msg);
+    client.publish("domoticz/in", msg);
     BellOn = true;
 }
 
@@ -471,7 +477,6 @@ void loop(){
             }
         }
         inbuf[tel] = 0; //add terminater
-
         //Decode serial data
         array_to_string(inbuf,tel,msg);
         TelnetStream.println(msg);
@@ -480,12 +485,17 @@ void loop(){
             belstamp = millis();
             SetDisplayOn();
             displayoff = 1000 * 60 * 5 + millis();      //turn dispay on for 5 minuts
-        }else if(BufComp(inbuf,tel,idBell,3)){        //Check data for ring command other home's
+        }else if(BufComp(inbuf,tel,idBell,1)){        //Check data for ring command other home's
             sprintf(msg,"Deurbel");
-            bot.sendMessage(TelegramChatId, msg, "Markdown");
             TelnetStream.println(msg);
             doc.clear();
             doc["idx"] = idx_txt;
+            doc["svalue"] = msg;
+            serializeJson(doc, msg);
+            client.publish("domoticz/in", msg);
+            sprintf(msg,"Deurbel");
+            doc.clear();
+            doc["idx"] = idx_debug;
             doc["svalue"] = msg;
             serializeJson(doc, msg);
             client.publish("domoticz/in", msg);
@@ -501,11 +511,11 @@ void loop(){
         client.publish("domoticz/in", msg);
     }
     //turn display off after timeout
-    if (DisplayOn == true && displayoff < millis()){ //turn display off after timeout
+    if (DisplayOn == true && displayoff < millis()){ //turn display off after timeout 
         SetDisplayOff();
     }
 
-    if (BellOn && millis() < belstamp  + 10000){ //Send bell off to domotixz
+    if (BellOn && millis() > belstamp  + 1000*60*2){ //Send bell off to domotixz after 2 minutes 
         BellOn = false;
         doc.clear();
         doc["idx"] = idx_bel;
@@ -513,7 +523,7 @@ void loop(){
         serializeJson(doc, msg);
         client.publish("domoticz/in", msg);
     }
-    if (DoorKeyOn && millis() > doorkeystamp  + 5000){ //Relase door key knob
+    if (DoorKeyOn && millis() > doorkeystamp  +2000){ //Relase door key knob
         DoorKeyOn = false;
         digitalWrite(Key, 1);
         sprintf(msg,"Key open door released");

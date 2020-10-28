@@ -1,8 +1,17 @@
 # Intercom_VEO-VDS
 Intercom systeem Bijlmerdreef 
 
-A9 XX  
-A9 door bel pusshed XX number
+Bus 1200Baud
+Video compesiet
 
-2B XX
-2B Open door request from number XX
+
+A9XX  
+A9 door bel pusshed 
+XX number
+
+2BXX
+2B Open door request
+xx from number
+
+59F0
+Probbebly reset system
