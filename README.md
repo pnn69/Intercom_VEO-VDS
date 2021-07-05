@@ -2,7 +2,7 @@
 Intercom systeem Bijlmerdreef 
 
 Bus 1200Baud
-Video compesiet
+Video compensiet
 
 
 A9XX  
